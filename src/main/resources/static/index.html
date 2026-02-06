@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Airline Flights</title>
+    <style>
+        body{font-family:Arial, sans-serif; max-width:1000px; margin:24px auto; padding:0 12px;}
+        h1{margin:0 0 16px;}
+        .row{display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:16px;}
+        label{display:flex; flex-direction:column; gap:6px; font-size:14px;}
+        input{padding:8px 10px; min-width:180px;}
+        button{padding:10px 14px; cursor:pointer;}
+        table{width:100%; border-collapse:collapse;}
+        th,td{border:1px solid #ddd; padding:10px; text-align:left;}
+        th{background:#f5f5f5;}
+        .actions{display:flex; gap:8px;}
+        .muted{color:#666; font-size:13px;}
+        .error{color:#b00020;}
+    </style>
+</head>
+<body>
+<h1>Flights CRUD</h1>
+<div class="muted">API: <span id="apiUrl"></span></div>
+<div id="msg" class="muted" style="margin:10px 0;"></div>
+
+<div class="row">
+    <label>Flight Number
+        <input id="flightNumber" placeholder="KZ555" />
+    </label>
+    <label>From Airport
+        <input id="fromAirport" placeholder="AKT" maxlength="3" />
+    </label>
+    <label>To Airport
+        <input id="toAirport" placeholder="ALA" maxlength="3" />
+    </label>
+    <label>Departure Time (ISO)
+        <input id="departureTime" placeholder="2026-02-06T18:00:00" />
+    </label>
+
+    <button id="createBtn">Create</button>
+    <button id="refreshBtn">Refresh</button>
+</div>
+
+<div id="error" class="error"></div>
+
+<table>
+    <thead>
+    <tr>
+        <th>ID</th>
+        <th>Flight Number</th>
+        <th>From</th>
+        <th>To</th>
+        <th>Departure Time</th>
+        <th>Actions</th>
+    </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+</table>
+
+<script>
+    const API = "http://localhost:8080/flights";
+    document.getElementById("apiUrl").textContent = API;
+
+    const $ = (id) => document.getElementById(id);
+    const msg = (t) => $("msg").textContent = t || "";
+    const err = (t) => $("error").textContent = t || "";
+
+    async function request(url, options) {
+        const res = await fetch(url, options);
+        const ct = res.headers.get("content-type") || "";
+        let data = null;
+        if (ct.includes("application/json")) {
+            data = await res.json().catch(() => null);
+        } else {
+            data = await res.text().catch(() => null);
+        }
+        if (!res.ok) {
+            // красивое сообщение
+            const serverMsg = data && data.message ? data.message : (typeof data === "string" ? data : "");
+            throw new Error(serverMsg || `HTTP ${res.status}`);
+        }
+        return data;
+    }
+
+    function readForm() {
+        return {
+            flightNumber: $("flightNumber").value.trim(),
+            fromAirport: $("fromAirport").value.trim().toUpperCase(),
+            toAirport: $("toAirport").value.trim().toUpperCase(),
+            departureTime: $("departureTime").value.trim()
+        };
+    }
+
+    function validatePayload(p) {
+        if (!p.flightNumber || !p.fromAirport || !p.toAirport || !p.departureTime) {
+            throw new Error("Заполни все поля (flightNumber, fromAirport, toAirport, departureTime).");
+        }
+        if (p.fromAirport.length !== 3 || p.toAirport.length !== 3) {
+            throw new Error("Коды аэропортов должны быть по 3 буквы (например AKT, ALA).");
+        }
+        // departureTime ожидаем ISO-строку типа 2026-02-06T18:00:00
+        if (!p.departureTime.includes("T")) {
+            throw new Error("departureTime должен быть ISO формата: 2026-02-06T18:00:00");
+        }
+    }
+
+    function rowTemplate(f) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+      <td>${f.id ?? ""}</td>
+      <td><input value="${f.flightNumber ?? ""}" data-k="flightNumber" style="width:140px"></td>
+      <td><input value="${f.fromAirport ?? ""}" data-k="fromAirport" maxlength="3" style="width:70px"></td>
+      <td><input value="${f.toAirport ?? ""}" data-k="toAirport" maxlength="3" style="width:70px"></td>
+      <td><input value="${(f.departureTime ?? "")}" data-k="departureTime" style="width:220px"></td>
+      <td class="actions">
+        <button data-act="update">Update</button>
+        <button data-act="delete">Delete</button>
+      </td>
+    `;
+        tr.querySelector('[data-act="update"]').onclick = () => updateFlight(tr, f.id);
+        tr.querySelector('[data-act="delete"]').onclick = () => deleteFlight(f.id);
+        return tr;
+    }
+
+    async function loadFlights() {
+        err("");
+        msg("Loading...");
+        const list = await request(API, { method: "GET" });
+        const tbody = $("tbody");
+        tbody.innerHTML = "";
+        (list || []).forEach(f => tbody.appendChild(rowTemplate(f)));
+        msg(`Loaded: ${list?.length ?? 0}`);
+    }
+
+    async function createFlight() {
+        err("");
+        const payload = readForm();
+        validatePayload(payload);
+
+        await request(API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        msg("Created ✅");
+        await loadFlights();
+    }
+
+    function readRow(tr) {
+        const obj = {};
+        tr.querySelectorAll("input[data-k]").forEach(i => {
+            const k = i.getAttribute("data-k");
+            obj[k] = i.value.trim();
+        });
+        obj.fromAirport = (obj.fromAirport || "").toUpperCase();
+        obj.toAirport = (obj.toAirport || "").toUpperCase();
+        return obj;
+    }
+
+    async function updateFlight(tr, id) {
+        err("");
+        const payload = readRow(tr);
+        validatePayload(payload);
+
+        await request(`${API}/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        msg(`Updated #${id} ✅`);
+        await loadFlights();
+    }
+
+    async function deleteFlight(id) {
+        err("");
+        if (!confirm(`Delete flight #${id}?`)) return;
+
+        await request(`${API}/${id}`, { method: "DELETE" });
+        msg(`Deleted #${id} ✅`);
+        await loadFlights();
+    }
+
+    $("createBtn").onclick = () => createFlight().catch(e => err(e.message));
+    $("refreshBtn").onclick = () => loadFlights().catch(e => err(e.message));
+
+    loadFlights().catch(e => err(e.message));
+</script>
+</body>
+</html>
