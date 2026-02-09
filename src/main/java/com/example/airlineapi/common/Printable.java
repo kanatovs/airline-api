@@ -3,12 +3,12 @@ package com.example.airlineapi.common;
 public interface Printable {
     void print();
 
-    // Default interface method (доп. фича из списка)
+    // Default interface method
     default String printableSummary() {
         return getClass().getSimpleName();
     }
 
-    // Static interface method (доп. фича из списка)
+    // Static interface method
     static void printLine(String text) {
         System.out.println(text);
     }

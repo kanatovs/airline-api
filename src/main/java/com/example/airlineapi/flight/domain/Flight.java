@@ -27,7 +27,6 @@ public class Flight implements Printable {
     private LocalDateTime departureTime;
 
     protected Flight() {
-        // JPA
     }
 
     public Flight(String flightNumber, String fromAirport, String toAirport, LocalDateTime departureTime) {
@@ -77,7 +76,7 @@ public class Flight implements Printable {
         return 31;
     }
 
-    // ===== Builder Pattern =====
+
     public static Builder builder() {
         return new Builder();
     }

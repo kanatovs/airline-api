@@ -9,7 +9,7 @@ public final class FlightFactory {
     private FlightFactory() {}
 
     public static Flight createDefaultFlight() {
-        // Builder используется внутри Factory = два паттерна в одном потоке
+        // Builder используется внутри Factory
         return Flight.builder()
                 .flightNumber("KZ100")
                 .fromAirport("ALA")
