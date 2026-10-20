@@ -74,16 +74,17 @@ is not implemented. There is no PATCH endpoint or custom error contract.
 
 ## Database and configuration
 
-[application.properties](src/main/resources/application.properties) currently
-points to a local PostgreSQL database and enables
-`spring.jpa.hibernate.ddl-auto=update`. Hibernate creates or updates mapped
+[application.properties](src/main/resources/application.properties) contains no
+database URL, username or password. Spring Boot reads datasource settings from
+the process environment. The application still enables
+`spring.jpa.hibernate.ddl-auto=update`: Hibernate creates or updates mapped
 tables when the application context starts. The database itself must already
 exist, and the configured role needs schema creation/update permissions.
 
 There are no versioned SQL migrations or automatic seed records. Hibernate schema
 updates are a development convenience, not a migration history.
 
-Override the checked-in datasource settings with process environment variables:
+Set the datasource through process environment variables:
 
 | Environment variable | Recommended local value / behavior |
 | --- | --- |
@@ -95,11 +96,16 @@ Override the checked-in datasource settings with process environment variables:
 | `SERVER_PORT` | Spring Boot default: `8080` |
 | `JAVA_HOME` | Installation directory of a JDK compatible with the Java 17 toolchain |
 
-The existing configuration contains a hard-coded database password.
-Do not reuse that value. If it was used for a real database, treat it as exposed
-and rotate it. Credential removal and rotation remain outstanding; environment
-overrides do not remove the value from repository history.
-The project does not configure automatic `.env` loading.
+[.env.example](.env.example) documents the local settings and leaves the password
+blank. It is a reference file: Spring Boot and the Gradle wrapper do not load
+`.env` automatically. Use the PowerShell commands below to set the environment;
+copying the example to `.env` alone does not configure the application. Local
+`.env` files are ignored by Git; never put real credentials into the example.
+
+A database password was previously committed. It has been removed from the
+current configuration, but remains in published Git history. If it was used for
+a real database, its owner must rotate it. Removing the source value does not
+revoke that credential or erase repository history.
 
 ## Local setup: Windows PowerShell
 
@@ -143,15 +149,24 @@ java -version
 .\gradlew.bat --version
 ```
 
-These variables apply to this PowerShell session and its child processes.
-Set them again in any terminal used to build or run the application.
+Enter the password assigned with `\password airline_app`. The prompt hides it
+and keeps the plaintext value out of the command itself. These variables apply
+to this PowerShell session and its child processes. Set them again in any
+terminal used to build or run the application.
 
 ### 3. Build and test
 
-The [single existing test](src/test/java/com/example/airlineapi/AirlineApi2ApplicationTests.java)
-uses `@SpringBootTest` and loads the application context. It requires PostgreSQL;
-Hibernate can create/update tables during the test. It does not verify HTTP
-endpoints or service behavior.
+The `DataSourceConfigurationTests` verify environment-based datasource binding
+and guard against checked-in connection settings. Run them without PostgreSQL:
+
+```powershell
+.\gradlew.bat test --tests '*DataSourceConfigurationTests'
+```
+
+The [context-load test](src/test/java/com/example/airlineapi/AirlineApi2ApplicationTests.java)
+uses `@SpringBootTest` and requires PostgreSQL. Hibernate can create/update tables
+during this test. It does not verify HTTP endpoints or service behavior. Run the
+full suite against the separate test database:
 
 ```powershell
 $env:SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5432/airline_test'
@@ -216,7 +231,8 @@ Invoke-WebRequest -Method Delete -Uri $flightUri
 - The static demo expects `flightId`, `origin`, `destination` and `capacity`;
   the backend exposes `id`, `fromAirport`, `toAirport` and no capacity field.
   Rendering and mutations need alignment before that demo is a usable client.
-- Only a context-load test exists; there are no dedicated controller, service
-  or repository tests. No CI pipeline or automated migration system is present.
-- Database credentials remain hard-coded in the existing configuration. Always
-  override them locally and address credential removal/rotation separately.
+- Datasource configuration and context loading have tests; there are no dedicated
+  controller, service or repository tests. No CI pipeline or automated migration
+  system is present.
+- A previously committed database password remains in published Git history;
+  rotate it if it was used for a real database.
