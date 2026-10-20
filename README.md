@@ -21,6 +21,8 @@ There is no configured CI workflow, Docker environment or Flyway dependency.
 
 - List all flights and retrieve a flight by ID.
 - Create, update and delete flight records.
+- Return a consistent HTTP 404 problem response when reading, updating or deleting
+  a flight that does not exist.
 - Persist flight data through Spring Data JPA in PostgreSQL.
 - Serve the bundled static demo at `/`. Its JavaScript uses a different data
   model from the API, so the page is not a verified working CRUD client.
@@ -42,6 +44,12 @@ The service delegates persistence to a
 The [Flight entity](src/main/java/com/example/airlineapi/flight/domain/Flight.java)
 maps to the `flights` table. Constructor injection connects the layers.
 
+For operations on one flight, the service first looks up its ID. An absent
+record raises `FlightNotFoundException`; the HTTP exception handler maps only
+that exception to a 404 `ProblemDetail` response. Other failures are not
+converted into missing-flight responses. Update and delete reuse the same
+lookup before changing stored data.
+
 `FlightFactory`, `Printable` and the generic in-memory `DataPool` are also present;
 they do not participate in the HTTP persistence flow.
 
@@ -50,13 +58,13 @@ they do not participate in the HTTP persistence flow.
 Default base URL: `http://localhost:8080`. JSON responses contain the entity or
 array directly, without a custom response envelope.
 
-| Method | Path | Implemented behavior | Success status |
-| --- | --- | --- | --- |
-| GET | `/flights` | Return all stored flights | 200 |
-| GET | `/flights/{id}` | Return one existing flight | 200 |
-| POST | `/flights` | Save a flight and return it with its generated ID | 201 |
-| PUT | `/flights/{id}` | Replace the four mutable fields of an existing flight | 200 |
-| DELETE | `/flights/{id}` | Delete by ID, with no response body | 204 |
+| Method | Path | Implemented behavior | Success status | Missing ID |
+| --- | --- | --- | --- | --- |
+| GET | `/flights` | Return all stored flights | 200 | N/A |
+| GET | `/flights/{id}` | Return one existing flight | 200 | 404 |
+| POST | `/flights` | Save a flight and return it with its generated ID | 201 | N/A |
+| PUT | `/flights/{id}` | Replace the four mutable fields of an existing flight | 200 | 404 |
+| DELETE | `/flights/{id}` | Delete an existing flight, with no response body | 204 | 404 |
 
 Flight fields:
 
@@ -68,9 +76,23 @@ Flight fields:
 | `toAirport` | String | Non-null, up to 3 characters |
 | `departureTime` | String | Non-null ISO local date-time, e.g. `2026-11-01T10:00:00`; no timezone offset |
 
-These are persistence constraints, not request-validation rules. Missing IDs in
-reads/updates currently throw an unhandled exception; a consistent 404 response
-is not implemented. There is no PATCH endpoint or custom error contract.
+These are persistence constraints, not request-validation rules. There is no
+PATCH endpoint. Requests to read, update or delete a missing flight return
+`Content-Type: application/problem+json`. For example, when ID `999` does not
+exist, `GET /flights/999` returns HTTP 404 with:
+
+```json
+{
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Flight not found",
+  "instance": "/flights/999"
+}
+```
+
+PUT and DELETE use the same error format. This mapping covers missing flights;
+it is not a general error contract for validation or database failures.
+Spring omits the default `type` field; its implicit value is `about:blank`.
 
 ## Database and configuration
 
@@ -156,11 +178,17 @@ terminal used to build or run the application.
 
 ### 3. Build and test
 
-The `DataSourceConfigurationTests` verify environment-based datasource binding
-and guard against checked-in connection settings. Run them without PostgreSQL:
+The following focused tests run without PostgreSQL:
+
+- `DataSourceConfigurationTests` verify environment-based datasource binding
+  and guard against checked-in connection settings.
+- `FlightServiceImplTests` verify successful and missing-flight operations
+  using a mocked repository.
+- `FlightControllerTests` verify HTTP status codes and missing-flight problem
+  responses using MVC tests with the real service and a mocked repository.
 
 ```powershell
-.\gradlew.bat test --tests '*DataSourceConfigurationTests'
+.\gradlew.bat test --tests '*DataSourceConfigurationTests' --tests '*FlightServiceImplTests' --tests '*FlightControllerTests'
 ```
 
 The [context-load test](src/test/java/com/example/airlineapi/AirlineApi2ApplicationTests.java)
@@ -224,15 +252,16 @@ Invoke-WebRequest -Method Delete -Uri $flightUri
 
 - The backend implements basic flight CRUD for a learning project. No production
   deployment or usage is claimed.
-- Request DTO validation, consistent error mapping, access control, pagination
-  and business rules such as airport-code validation are not implemented.
+- Request DTO validation, general error mapping, access control, pagination and
+  business rules such as airport-code validation are not implemented. Missing
+  flights have a dedicated 404 response.
 - The controller allows all CORS origins. Review configuration and credentials
   before exposing the application beyond local development.
 - The static demo expects `flightId`, `origin`, `destination` and `capacity`;
   the backend exposes `id`, `fromAirport`, `toAirport` and no capacity field.
   Rendering and mutations need alignment before that demo is a usable client.
-- Datasource configuration and context loading have tests; there are no dedicated
-  controller, service or repository tests. No CI pipeline or automated migration
-  system is present.
+- Datasource configuration, context loading, flight service operations and
+  controller behavior have tests. There are no dedicated repository tests,
+  CI pipeline or automated migration system.
 - A previously committed database password remains in published Git history;
   rotate it if it was used for a real database.

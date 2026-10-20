@@ -1,6 +1,7 @@
 package com.example.airlineapi.flight.service;
 
 import com.example.airlineapi.flight.domain.Flight;
+import com.example.airlineapi.flight.domain.FlightNotFoundException;
 import com.example.airlineapi.flight.repository.FlightRepository;
 import org.springframework.stereotype.Service;
 
@@ -22,7 +23,7 @@ public class FlightServiceImpl implements FlightService {
 
     @Override
     public Flight getById(Long id) {
-        return repository.findById(id).orElseThrow();
+        return repository.findById(id).orElseThrow(FlightNotFoundException::new);
     }
 
     @Override
@@ -44,6 +45,6 @@ public class FlightServiceImpl implements FlightService {
 
     @Override
     public void delete(Long id) {
-        repository.deleteById(id);
+        repository.delete(getById(id));
     }
 }
