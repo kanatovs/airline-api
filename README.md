@@ -124,7 +124,7 @@ The browser uses the actual API fields (`id`, `flightNumber`, `fromAirport`, `to
 
 On Linux/macOS use `./gradlew build`. This compiles, runs the full suite, and packages the application. By default, the test profile uses temporary in-memory H2 and applies the same Flyway migration. No application database settings are needed. H2 alone does not prove PostgreSQL compatibility.
 
-Tests cover configuration binding, service failure handling, MVC responses, full persisted CRUD, normalization, invalid fields/JSON/dates/IDs, and preservation of an existing record after invalid PUT. Configuration tests hide the test-only H2 driver to exercise the production PostgreSQL-only runtime.
+Tests cover configuration binding and isolation from application database settings, service failure handling, MVC responses, full persisted CRUD, normalization, invalid fields/JSON/dates/IDs, and preservation of an existing record after invalid PUT. Configuration tests hide the test-only H2 driver to exercise the production PostgreSQL-only runtime. Integration test datasource settings take priority over ordinary `SPRING_DATASOURCE_*` process variables, so a configured application database cannot redirect the default H2 test suite.
 
 GitHub Actions also starts a separate empty PostgreSQL 16 service, applies Flyway, validates Hibernate mappings, and runs the context and HTTP CRUD integration tests against it. To repeat this locally, create a separate disposable PostgreSQL database, then set:
 
