@@ -1,6 +1,5 @@
 package com.example.airlineapi.common;
 
-import com.example.airlineapi.flight.FlightNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -14,11 +13,6 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
-    @ExceptionHandler(FlightNotFoundException.class)
-    public ProblemDetail notFound(FlightNotFoundException exception) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
-    }
-
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail invalidRequest(MethodArgumentNotValidException exception) {
         Map<String, String> errors = new LinkedHashMap<>();

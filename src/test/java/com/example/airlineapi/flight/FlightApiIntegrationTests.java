@@ -69,7 +69,7 @@ class FlightApiIntegrationTests {
     void allOperationsOnMissingFlightReturn404() throws Exception {
         mvc.perform(get("/flights/999999"))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.detail").value("Flight 999999 was not found"));
+                .andExpect(jsonPath("$.detail").value("Flight not found"));
         mvc.perform(put("/flights/999999").contentType(MediaType.APPLICATION_JSON).content(VALID_FLIGHT))
                 .andExpect(status().isNotFound());
         mvc.perform(delete("/flights/999999")).andExpect(status().isNotFound());

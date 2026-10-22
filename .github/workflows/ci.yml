@@ -29,3 +29,39 @@ jobs:
         with:
           name: test-results
           path: build/reports/tests/test
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: airline_ci
+          POSTGRES_USER: airline_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U airline_ci -d airline_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: jdbc:postgresql://localhost:5432/airline_ci
+      TEST_DATABASE_DRIVER: org.postgresql.Driver
+      TEST_DATABASE_USERNAME: airline_ci
+      TEST_DATABASE_PASSWORD: ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify migrations and CRUD on clean PostgreSQL
+        run: bash ./gradlew --no-daemon test --tests '*FlightApiIntegrationTests' --tests '*AirlineApi2ApplicationTests'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postgres-test-results
+          path: build/reports/tests/test
