@@ -36,7 +36,8 @@ out/
 ### VS Code ###
 .vscode/
 
-### Local environment ###
+# Local connection settings and secrets
 .env
 .env.*
 !.env.example
+application-local.properties

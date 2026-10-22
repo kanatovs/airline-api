@@ -1,85 +1,107 @@
 # Airline API
 
-A Java and Spring Boot REST API for storing and managing flight records in
-PostgreSQL. This is a learning and portfolio project; the current build version
-is `0.0.1-SNAPSHOT`.
+A Java 17 and Spring Boot 4.0.2 learning project for managing flight records in PostgreSQL, with a bundled HTML/CSS/JavaScript interface.
 
-## Technology stack
+![Flight management interface](docs/screenshots/airline-desktop.png)
 
-The [Gradle build](build.gradle) and wrapper configure:
+[Mobile preview](docs/screenshots/airline-mobile.png). The screenshots use demonstration records in a temporary test database.
 
-- Java 17 toolchain.
-- Spring Boot 4.0.2 and Spring MVC.
-- Spring Data JPA with Hibernate and the PostgreSQL JDBC driver.
-- Gradle 9.3.0 wrapper and Spring dependency management plugin 1.1.7.
-- JUnit Jupiter through Spring Boot test starters.
-- A bundled HTML, CSS and JavaScript demo under `src/main/resources/static`.
+## Features and architecture
 
-There is no configured CI workflow, Docker environment or Flyway dependency.
-
-## Implemented features
-
-- List all flights and retrieve a flight by ID.
-- Create, update and delete flight records.
-- Return a consistent HTTP 404 problem response when reading, updating or deleting
-  a flight that does not exist.
-- Persist flight data through Spring Data JPA in PostgreSQL.
-- Serve the bundled static demo at `/`. Its JavaScript uses a different data
-  model from the API, so the page is not a verified working CRUD client.
-
-There is no authentication or authorization. The backend has no search,
-pagination, booking, passenger or payment endpoints.
-
-## Architecture
+- Flight CRUD at `/flights`, with a browser interface at `http://127.0.0.1:8080`.
+- Validated request DTOs and normalized flight numbers and airport codes.
+- Problem Details responses for invalid input (400) and missing flights (404).
+- Flyway schema migrations; Hibernate validates the schema without changing it.
+- Service and MVC regression tests, H2 integration tests, and PostgreSQL integration checks in GitHub Actions.
 
 ```text
 HTTP -> FlightController -> FlightServiceImpl -> FlightRepository -> PostgreSQL
 ```
 
-The [controller](src/main/java/com/example/airlineapi/flight/FlightController.java)
-maps HTTP requests to the
-[service](src/main/java/com/example/airlineapi/flight/service/FlightServiceImpl.java).
-The service delegates persistence to a
-[Spring Data JPA repository](src/main/java/com/example/airlineapi/flight/repository/FlightRepository.java).
-The [Flight entity](src/main/java/com/example/airlineapi/flight/domain/Flight.java)
-maps to the `flights` table. Constructor injection connects the layers.
+The controller maps request DTOs to entities and returns response DTOs. The service owns transactions. Reading, updating, or deleting an absent flight raises the existing domain `FlightNotFoundException`, mapped by `FlightExceptionHandler` to a safe 404 response. `ApiExceptionHandler` handles invalid input. Database failures are not disguised as missing flights.
 
-For operations on one flight, the service first looks up its ID. An absent
-record raises `FlightNotFoundException`; the HTTP exception handler maps only
-that exception to a 404 `ProblemDetail` response. Other failures are not
-converted into missing-flight responses. Update and delete reuse the same
-lookup before changing stored data.
+`FlightFactory`, `Printable`, and `DataPool` remain learning examples outside this HTTP flow.
 
-`FlightFactory`, `Printable` and the generic in-memory `DataPool` are also present;
-they do not participate in the HTTP persistence flow.
+## Requirements
+
+- JDK 17, with matching `java` and `javac` on PATH.
+- A running PostgreSQL server for the application. CI verifies PostgreSQL 16.
+- Network access on the first Gradle Wrapper run; a separate Gradle installation is unnecessary.
+
+## Database setup
+
+Create a dedicated role and a **new empty database** through an administrator's `psql` session:
+
+```sql
+CREATE ROLE airline_app LOGIN;
+\password airline_app
+CREATE DATABASE airline OWNER airline_app;
+```
+
+`\password` prompts interactively. The application role must be able to create tables in its database. Flyway applies [V1__create_flights.sql](src/main/resources/db/migration/V1__create_flights.sql), then Hibernate validates the mapped columns.
+
+An existing database may contain tables created by earlier Hibernate `ddl-auto=update` versions. Back it up and verify a separate migration plan before using it. Automatic baseline is disabled. Do not delete existing tables or enable baseline just to make startup succeed; use a new database for a local demonstration.
+
+## Configuration and run
+
+Spring Boot reads the standard process environment variables; neither Spring Boot nor the wrapper automatically loads `.env`. [.env.example](.env.example) is a reference containing no real credentials.
+
+| Variable | Meaning |
+| --- | --- |
+| `SPRING_DATASOURCE_URL` | Required PostgreSQL JDBC URL |
+| `SPRING_DATASOURCE_USERNAME` | Database role |
+| `SPRING_DATASOURCE_PASSWORD` | Set privately in the shell or IDE |
+| `SERVER_ADDRESS` | Listening address, default `127.0.0.1` |
+| `SERVER_PORT` | HTTP port, default `8080` |
+| `JAVA_HOME` | JDK installation directory |
+
+PowerShell, from the repository root:
+
+```powershell
+$env:SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5432/airline'
+$env:SPRING_DATASOURCE_USERNAME = 'airline_app'
+$env:SPRING_DATASOURCE_PASSWORD = [System.Net.NetworkCredential]::new('', (Read-Host 'Database password' -AsSecureString)).Password
+.\gradlew.bat bootRun
+```
+
+Linux/macOS:
+
+```bash
+export SPRING_DATASOURCE_URL='jdbc:postgresql://localhost:5432/airline'
+export SPRING_DATASOURCE_USERNAME='airline_app'
+read -rsp 'Database password: ' SPRING_DATASOURCE_PASSWORD; echo
+export SPRING_DATASOURCE_PASSWORD
+./gradlew bootRun
+```
+
+Open `http://127.0.0.1:8080`. The interface calls the API on the same origin, including when `SERVER_PORT` changes. Stop with Ctrl+C.
 
 ## API
 
-Default base URL: `http://localhost:8080`. JSON responses contain the entity or
-array directly, without a custom response envelope.
+Responses contain a flight object or array directly. The list can be filtered in the browser; there is no backend search endpoint.
 
-| Method | Path | Implemented behavior | Success status | Missing ID |
-| --- | --- | --- | --- | --- |
-| GET | `/flights` | Return all stored flights | 200 | N/A |
-| GET | `/flights/{id}` | Return one existing flight | 200 | 404 |
-| POST | `/flights` | Save a flight and return it with its generated ID | 201 | N/A |
-| PUT | `/flights/{id}` | Replace the four mutable fields of an existing flight | 200 | 404 |
-| DELETE | `/flights/{id}` | Delete an existing flight, with no response body | 204 | 404 |
+| Method | Path | Success | Missing record |
+| --- | --- | --- | --- |
+| GET | `/flights` | 200, array | N/A |
+| GET | `/flights/{id}` | 200, flight | 404 |
+| POST | `/flights` | 201, created flight | N/A |
+| PUT | `/flights/{id}` | 200, updated flight | 404 |
+| DELETE | `/flights/{id}` | 204, empty body | 404 |
 
-Flight fields:
+POST/PUT body:
 
-| Field | Type | Storage / meaning |
-| --- | --- | --- |
-| `id` | Integer | Database-generated identity; omit when creating |
-| `flightNumber` | String | Non-null, up to 10 characters |
-| `fromAirport` | String | Non-null, up to 3 characters |
-| `toAirport` | String | Non-null, up to 3 characters |
-| `departureTime` | String | Non-null ISO local date-time, e.g. `2026-11-01T10:00:00`; no timezone offset |
+```json
+{
+  "flightNumber": "KZ100",
+  "fromAirport": "ALA",
+  "toAirport": "NQZ",
+  "departureTime": "2026-11-01T14:30:00"
+}
+```
 
-These are persistence constraints, not request-validation rules. There is no
-PATCH endpoint. Requests to read, update or delete a missing flight return
-`Content-Type: application/problem+json`. For example, when ID `999` does not
-exist, `GET /flights/999` returns HTTP 404 with:
+Responses add a generated numeric `id`. Flight numbers contain 1–10 Latin letters, digits, or hyphens. Airport codes contain three Latin letters; departure and arrival must differ. Codes and flight numbers are trimmed and uppercased. This validates IATA code format, not membership in an external airport registry. Dates use `LocalDateTime` without a timezone; historical flights are allowed.
+
+Missing flights preserve the current API contract:
 
 ```json
 {
@@ -90,178 +112,38 @@ exist, `GET /flights/999` returns HTTP 404 with:
 }
 ```
 
-PUT and DELETE use the same error format. This mapping covers missing flights;
-it is not a general error contract for validation or database failures.
-Spring omits the default `type` field; its implicit value is `about:blank`.
+The response content type is `application/problem+json`. The omitted default `type` means `about:blank`. Invalid fields return 400 with an `errors` object; malformed JSON, dates, and nonnumeric IDs also return 400.
 
-## Database and configuration
+The browser uses the actual API fields (`id`, `flightNumber`, `fromAirport`, `toAirport`, `departureTime`) and renders text without inserting API values as HTML. Mobile records use cards with edit/delete actions.
 
-[application.properties](src/main/resources/application.properties) contains no
-database URL, username or password. Spring Boot reads datasource settings from
-the process environment. The application still enables
-`spring.jpa.hibernate.ddl-auto=update`: Hibernate creates or updates mapped
-tables when the application context starts. The database itself must already
-exist, and the configured role needs schema creation/update permissions.
-
-There are no versioned SQL migrations or automatic seed records. Hibernate schema
-updates are a development convenience, not a migration history.
-
-Set the datasource through process environment variables:
-
-| Environment variable | Recommended local value / behavior |
-| --- | --- |
-| `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/airline` |
-| `SPRING_DATASOURCE_USERNAME` | `airline_app` |
-| `SPRING_DATASOURCE_PASSWORD` | Set interactively; never commit it |
-| `SPRING_JPA_HIBERNATE_DDL_AUTO` | Existing default: `update` |
-| `SPRING_JPA_SHOW_SQL` | Existing default: `true` |
-| `SERVER_PORT` | Spring Boot default: `8080` |
-| `JAVA_HOME` | Installation directory of a JDK compatible with the Java 17 toolchain |
-
-[.env.example](.env.example) documents the local settings and leaves the password
-blank. It is a reference file: Spring Boot and the Gradle wrapper do not load
-`.env` automatically. Use the PowerShell commands below to set the environment;
-copying the example to `.env` alone does not configure the application. Local
-`.env` files are ignored by Git; never put real credentials into the example.
-
-A database password was previously committed. It has been removed from the
-current configuration, but remains in published Git history. If it was used for
-a real database, its owner must rotate it. Removing the source value does not
-revoke that credential or erase repository history.
-
-## Local setup: Windows PowerShell
-
-Requirements: Git, JDK 17, and a running local PostgreSQL server. Ensure `java`
-and `psql` are available in your terminal. Gradle is provided by the wrapper;
-the first build needs network access to download dependencies.
-
-Run the following from the repository root.
-
-### 1. Create development databases
-
-Connect with a local PostgreSQL administrator:
+## Tests and packaging
 
 ```powershell
-psql -U postgres -d postgres
-```
-
-In the `psql` prompt, create a dedicated role and two empty databases once.
-`\password` asks for a password without putting it into this README or a SQL
-command in shell history:
-
-```sql
-CREATE ROLE airline_app LOGIN;
-\password airline_app
-CREATE DATABASE airline OWNER airline_app;
-CREATE DATABASE airline_test OWNER airline_app;
-\q
-```
-
-Use the development database for manual requests and the separate test database
-for the context-load test. Do not point either workflow at a database containing
-data you need to preserve.
-
-### 2. Set process configuration
-
-```powershell
-$env:SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5432/airline'
-$env:SPRING_DATASOURCE_USERNAME = 'airline_app'
-$env:SPRING_DATASOURCE_PASSWORD = [System.Net.NetworkCredential]::new('', (Read-Host 'Database password' -AsSecureString)).Password
-java -version
-.\gradlew.bat --version
-```
-
-Enter the password assigned with `\password airline_app`. The prompt hides it
-and keeps the plaintext value out of the command itself. These variables apply
-to this PowerShell session and its child processes. Set them again in any
-terminal used to build or run the application.
-
-### 3. Build and test
-
-The following focused tests run without PostgreSQL:
-
-- `DataSourceConfigurationTests` verify environment-based datasource binding
-  and guard against checked-in connection settings.
-- `FlightServiceImplTests` verify successful and missing-flight operations
-  using a mocked repository.
-- `FlightControllerTests` verify HTTP status codes and missing-flight problem
-  responses using MVC tests with the real service and a mocked repository.
-
-```powershell
-.\gradlew.bat test --tests '*DataSourceConfigurationTests' --tests '*FlightServiceImplTests' --tests '*FlightControllerTests'
-```
-
-The [context-load test](src/test/java/com/example/airlineapi/AirlineApi2ApplicationTests.java)
-uses `@SpringBootTest` and requires PostgreSQL. Hibernate can create/update tables
-during this test. It does not verify HTTP endpoints or service behavior. Run the
-full suite against the separate test database:
-
-```powershell
-$env:SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5432/airline_test'
-.\gradlew.bat test
 .\gradlew.bat build
 ```
 
-Gradle writes the test report to `build/reports/tests/test/index.html` and build
-artifacts to `build/libs`. `build` includes the test task; it is not a
-database-independent compilation check. To compile and package separately:
+On Linux/macOS use `./gradlew build`. This compiles, runs the full suite, and packages the application. By default, the test profile uses temporary in-memory H2 and applies the same Flyway migration. No application database settings are needed. H2 alone does not prove PostgreSQL compatibility.
+
+Tests cover configuration binding and isolation from application database settings, service failure handling, MVC responses, full persisted CRUD, normalization, invalid fields/JSON/dates/IDs, and preservation of an existing record after invalid PUT. Configuration tests hide the test-only H2 driver to exercise the production PostgreSQL-only runtime. Integration test datasource settings take priority over ordinary `SPRING_DATASOURCE_*` process variables, so a configured application database cannot redirect the default H2 test suite.
+
+GitHub Actions also starts a separate empty PostgreSQL 16 service, applies Flyway, validates Hibernate mappings, and runs the context and HTTP CRUD integration tests against it. To repeat this locally, create a separate disposable PostgreSQL database, then set:
 
 ```powershell
-.\gradlew.bat bootJar
+$env:TEST_DATABASE_URL = 'jdbc:postgresql://localhost:5432/airline_test'
+$env:TEST_DATABASE_DRIVER = 'org.postgresql.Driver'
+$env:TEST_DATABASE_USERNAME = 'airline_app'
+$env:TEST_DATABASE_PASSWORD = [System.Net.NetworkCredential]::new('', (Read-Host 'Test database password' -AsSecureString)).Password
+.\gradlew.bat test --rerun-tasks --tests '*FlightApiIntegrationTests' --tests '*AirlineApi2ApplicationTests'
 ```
 
-### 4. Run
+These tests clear `flights` between cases. **Never point `TEST_DATABASE_*` at a database containing user data.** Use only the disposable test database; these variables do not configure a normal application launch. Unset them to return tests to H2.
 
-```powershell
-$env:SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5432/airline'
-.\gradlew.bat bootRun
-```
+Reports: `build/reports/tests/test/index.html`. Executable JAR: `build/libs/airline-api-0.0.1-SNAPSHOT.jar`; run it with `java -jar` and the standard `SPRING_DATASOURCE_*` variables above.
 
-Stop with Ctrl+C. The API uses port 8080 unless `SERVER_PORT` is set.
+The screenshots document desktop/mobile layouts. Automated backend tests do not establish live browser behavior or a production deployment.
 
-## Example requests
+## Limitations
 
-With the application running, use a second PowerShell terminal. These requests
-create, update and delete one development record:
+This is a local learning demonstration with no authentication or authorization. Changing data requires no login. Public deployment needs a separate security and deployment design. It has no passengers, bookings, capacity, payments, pagination, or timezone handling. Arbitrary cross-origin access is not enabled; the built-in interface uses the API origin.
 
-```powershell
-$base = 'http://localhost:8080'
-Invoke-RestMethod -Uri "$base/flights"
-
-$body = @{
-    flightNumber = 'KZ100'
-    fromAirport = 'ALA'
-    toAirport = 'NQZ'
-    departureTime = '2026-11-01T10:00:00'
-} | ConvertTo-Json
-$flight = Invoke-RestMethod -Method Post -Uri "$base/flights" -ContentType 'application/json' -Body $body
-$flightUri = "$base/flights/$($flight.id)"
-Invoke-RestMethod -Uri $flightUri
-
-$replacement = @{
-    flightNumber = 'KZ101'
-    fromAirport = 'NQZ'
-    toAirport = 'ALA'
-    departureTime = '2026-11-02T11:30:00'
-} | ConvertTo-Json
-Invoke-RestMethod -Method Put -Uri $flightUri -ContentType 'application/json' -Body $replacement
-Invoke-WebRequest -Method Delete -Uri $flightUri
-```
-
-## Status and limitations
-
-- The backend implements basic flight CRUD for a learning project. No production
-  deployment or usage is claimed.
-- Request DTO validation, general error mapping, access control, pagination and
-  business rules such as airport-code validation are not implemented. Missing
-  flights have a dedicated 404 response.
-- The controller allows all CORS origins. Review configuration and credentials
-  before exposing the application beyond local development.
-- The static demo expects `flightId`, `origin`, `destination` and `capacity`;
-  the backend exposes `id`, `fromAirport`, `toAirport` and no capacity field.
-  Rendering and mutations need alignment before that demo is a usable client.
-- Datasource configuration, context loading, flight service operations and
-  controller behavior have tests. There are no dedicated repository tests,
-  CI pipeline or automated migration system.
-- A previously committed database password remains in published Git history;
-  rotate it if it was used for a real database.
+A previously committed database password remains in published Git history. If it was used for a real database, its owner must rotate it. Environment configuration does not revoke an old password; repository history is not rewritten.

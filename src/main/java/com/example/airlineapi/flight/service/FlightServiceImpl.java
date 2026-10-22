@@ -4,10 +4,12 @@ import com.example.airlineapi.flight.domain.Flight;
 import com.example.airlineapi.flight.domain.FlightNotFoundException;
 import com.example.airlineapi.flight.repository.FlightRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@Transactional(readOnly = true)
 public class FlightServiceImpl implements FlightService {
 
     private final FlightRepository repository;
@@ -27,11 +29,13 @@ public class FlightServiceImpl implements FlightService {
     }
 
     @Override
+    @Transactional
     public Flight create(Flight flight) {
         return repository.save(flight);
     }
 
     @Override
+    @Transactional
     public Flight update(Long id, Flight flight) {
         Flight existing = getById(id);
 
@@ -44,6 +48,7 @@ public class FlightServiceImpl implements FlightService {
     }
 
     @Override
+    @Transactional
     public void delete(Long id) {
         repository.delete(getById(id));
     }

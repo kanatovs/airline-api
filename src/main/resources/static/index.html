@@ -2,45 +2,50 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Airline Management</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
 <header>
-    <h1>✈ Airline Management System</h1>
-    <span id="status">API: online</span>
+    <h1>✈ Airline Management</h1>
+    <span id="status" role="status">API: connecting…</span>
 </header>
-
-<section class="card">
-    <h2>Add Flight</h2>
-    <input id="number" placeholder="Flight number">
-    <input id="origin" placeholder="Origin">
-    <input id="destination" placeholder="Destination">
-    <input id="time" type="datetime-local">
-    <input id="capacity" type="number" placeholder="Capacity">
-    <button onclick="addFlight()">Add</button>
-</section>
-
-<section class="card">
-    <h2>Flights</h2>
-    <input id="search" placeholder="Search by flight number" oninput="renderFlights()">
-    <table>
-        <thead>
-        <tr>
-            <th>ID</th>
-            <th>Number</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Time</th>
-            <th>Cap.</th>
-            <th></th>
-        </tr>
-        </thead>
-        <tbody id="flights"></tbody>
-    </table>
-</section>
-
+<main>
+    <section class="card">
+        <h2 id="form-title">Add flight</h2>
+        <form id="flight-form">
+            <label>Flight number
+                <input id="number" required maxlength="10" placeholder="KZ100">
+            </label>
+            <label>From (IATA)
+                <input id="origin" required minlength="3" maxlength="3" placeholder="ALA">
+            </label>
+            <label>To (IATA)
+                <input id="destination" required minlength="3" maxlength="3" placeholder="NQZ">
+            </label>
+            <label>Departure time (local)
+                <input id="time" type="datetime-local" step="any" required>
+            </label>
+            <button id="save" type="submit">Add</button>
+            <button id="cancel" type="button" hidden>Cancel edit</button>
+        </form>
+        <p id="message" role="status" aria-live="polite"></p>
+    </section>
+    <section class="card">
+        <h2>Flights</h2>
+        <label>Search by flight number <input id="search" type="search"></label>
+        <button id="refresh" type="button">Refresh</button>
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th scope="col">ID</th><th scope="col">Number</th>
+                    <th scope="col">From</th><th scope="col">To</th><th scope="col">Departure time</th>
+                    <th scope="col">Actions</th></tr></thead>
+                <tbody id="flights"></tbody>
+            </table>
+        </div>
+    </section>
+</main>
 <script src="app.js"></script>
 </body>
 </html>

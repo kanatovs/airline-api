@@ -1,15 +1,13 @@
 package com.example.airlineapi.flight;
 
-import com.example.airlineapi.flight.domain.Flight;
+import com.example.airlineapi.flight.dto.FlightRequest;
+import com.example.airlineapi.flight.dto.FlightResponse;
 import com.example.airlineapi.flight.service.FlightService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import org.springframework.web.bind.annotation.CrossOrigin;
-
-@CrossOrigin(origins = "*")
-
 @RestController
 @RequestMapping("/flights")
 public class FlightController {
@@ -21,24 +19,24 @@ public class FlightController {
     }
 
     @GetMapping
-    public List<Flight> all() {
-        return service.getAll();
+    public List<FlightResponse> all() {
+        return service.getAll().stream().map(FlightResponse::from).toList();
     }
 
     @GetMapping("/{id}")
-    public Flight one(@PathVariable Long id) {
-        return service.getById(id);
+    public FlightResponse one(@PathVariable Long id) {
+        return FlightResponse.from(service.getById(id));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Flight create(@RequestBody Flight flight) {
-        return service.create(flight);
+    public FlightResponse create(@Valid @RequestBody FlightRequest request) {
+        return FlightResponse.from(service.create(request.toFlight()));
     }
 
     @PutMapping("/{id}")
-    public Flight update(@PathVariable Long id, @RequestBody Flight flight) {
-        return service.update(id, flight);
+    public FlightResponse update(@PathVariable Long id, @Valid @RequestBody FlightRequest request) {
+        return FlightResponse.from(service.update(id, request.toFlight()));
     }
 
     @DeleteMapping("/{id}")
